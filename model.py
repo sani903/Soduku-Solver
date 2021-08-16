@@ -5,12 +5,13 @@ from tensorflow import keras
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential, Model, load_model
 from tensorflow.keras.layers import Activation, Dense, Flatten, BatchNormalization,Conv2D, MaxPool2D, Dropout
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers import Adadelta
 from tensorflow.keras.metrics import categorical_crossentropy
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from keras.datasets import mnist
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, plot_confusion_matrix
 from tensorflow.keras.applications import imagenet_utils
+from sklearn.model_selection import KFold
 import itertools
 import shutil
 import glob
@@ -81,7 +82,7 @@ class Trainer:
 			Dense(units = 10, activation='softmax'),
 			])
 		self.loss = categorical_crossentropy
-		self.optimizer = Adam
+		self.optimizer = Adadelta
 		# End Editing
 
 	def load_data(self):
@@ -94,8 +95,8 @@ class Trainer:
 		# Start Editing
 		img_rows, img_cols=28, 28
 		# if K.image_data_format() == 'channels_first':
-		train_data = train_data.reshape(train_data.shape[0], img_rows, img_cols, 1)
-		test_data = test_data.reshape(test_data.shape[0], img_rows, img_cols, 1)
+		self.train_data = self.train_data.reshape(self.train_data.shape[0], img_rows, img_cols, 1)
+		self.test_data = self.test_data.reshape(self.test_data.shape[0], img_rows, img_cols, 1)
 		# inpx = (1, img_rows, img_cols)
 		
 		# else:
@@ -103,12 +104,12 @@ class Trainer:
 		# 	x_test = x_test.reshape(x_test.shape[0], img_rows, img_cols, 1)
 		# 	inpx = (img_rows, img_cols, 1)
 			
-		train_data = train_data.astype('float32')
-		test_data = test_data.astype('float32')
-		train_data /= 255
-		test_data /= 255
-		train_labels = keras.utils.to_categorical(train_labels)
-		test_labels = keras.utils.to_categorical(test_labels)	
+		self.train_data = self.train_data.astype('float32')
+		self.test_data = self.test_data.astype('float32')
+		self.train_data /= 255
+		self.test_data /= 255
+		self.train_labels = keras.utils.to_categorical(self.train_labels)
+		self.test_labels = keras.utils.to_categorical(self.test_labels)	
 
 
 		# End Editing
@@ -133,24 +134,83 @@ class Trainer:
 		else:
 			raise Exception('Model not trained')
 
+		
+
 	def train(self):
 		if not self.model:
 			return
 
 		print("Training...")
-		for epoch in range(self.num_epochs):
-			train_loss = self.run_epoch()
+		VALIDATION_ACCURACY = []
+		VALIDATION_LOSS = []
 
-			# For beginners, you can leave this alone as it is
-			# For others, you can try out splitting the train data into train + val data, and use the validation loss to determine whether to save the model or not
-			# Start Editing
+		save_dir = 'assets/model'
+		fold_var = 1
+		for layer in self.model.layers:
+			layer.trainable = True	  
+		kf = KFold(n_splits=8)
+		for train_index, val_index in kf.split(self.train_data, self.train_labels):
+			self.X_train, self.X_val = self.train_data[train_index], self.train_data[val_index]
+			self.y_train, self.y_val = self.train_labels[train_index], self.train_labels[val_index]	
+			self.model.compile(optimizer=self.optimizer,
+              loss=self.loss,
+              metrics=['accuracy'])
+			checkpoint = tf.keras.callbacks.ModelCheckpoint(save_dir+'model_'+str(fold_var)+'.h5', 
+							monitor='val_accuracy', verbose=1, 
+							save_best_only=True, mode='max') 
+			callbacks_list = [checkpoint]				 
+			history = self.model.fit(self.X_train, self.y_train,
+              batch_size=self.batch_size,
+			  validation_data=(self.X_val, self.y_val),
+              epochs=self.num_epochs,
+              verbose=2)
+			self.model.load_weights("assets/model/model_"+str(fold_var)+".h5") 
+			results = self.model.evaluate(self.X_val, self.y_val)
+			results = dict(zip(self.model.metrics_names,results))
 			
-			self.save_model()
-			# End Editing
+			VALIDATION_ACCURACY.append(results['accuracy'])
+			VALIDATION_LOSS.append(results['loss'])
+			
+			tf.keras.backend.clear_session()
+			
+			fold_var += 1
 
-			print(f'	Epoch #{epoch+1} trained')
-			print(f'		Train loss: {train_loss:.3f}')
 		print('Training Complete')
+
+
+	def plot_confusion_matrix(cm, classes,
+                          normalize=False,
+                          title='Confusion matrix',
+                          cmap=plt.cm.Blues):
+		"""
+		This function prints and plots the confusion matrix.
+		Normalization can be applied by setting `normalize=True`.
+		"""
+		plt.imshow(cm, interpolation='nearest', cmap=cmap)
+		plt.title(title)
+		plt.colorbar()
+		tick_marks = np.arange(len(classes))
+		plt.xticks(tick_marks, classes, rotation=45)
+		plt.yticks(tick_marks, classes)
+
+		if normalize:
+			cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+			print("Normalized confusion matrix")
+		else:
+			print('Confusion matrix, without normalization')
+
+		print(cm)
+
+		thresh = cm.max() / 2.
+		for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+			plt.text(j, i, cm[i, j],
+					horizontalalignment="center",
+					color="white" if cm[i, j] > thresh else "black")
+
+		plt.tight_layout()
+		plt.ylabel('True label')
+		plt.xlabel('Predicted label')
+
 
 	def test(self):
 		if not self.model:
@@ -158,10 +218,10 @@ class Trainer:
 
 		print(f'Running test...')
 		# Initialize running loss
-		running_loss = 0.0
 
 		# Start Editing
-
+		for layer in self.model.layers:
+			layer.trainable = False
 		# Set the ML library to freeze the parameter training
 
 		i = 0 # Number of batches
@@ -173,62 +233,51 @@ class Trainer:
 			# Find the predictions
 			# Find the loss
 			# Find the number of correct predictions and update correct
+			predictions = self.model.predict(x=batch_X, )
+			cm = confusion_matrix(self.test_labels, predictions)
+			plot_labels = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+			plot_confusion_matrix(cm = cm, classes = plot_labels)
+
 
 			# Update running_loss
 
 			i += 1
 		
-		# End Editing
+		score, acc = self.model.evaluate(x = self.test_data, y = self.test_labels, batch_size = self.batch_size)
+		print('Test score:', score)
+		print('Test accuracy:', acc)
+		return acc
+	
 
-		print(f'	Test loss: {(running_loss/i):.3f}')
-		print(f'	Test accuracy: {(correct*100/self.test_data.shape[0]):.2f}%')
+	# def run_epoch(self):
+	# 	# Initialize running loss
+	# 	running_loss = 0.0
 
-		return correct/self.test_data.shape[0]
+	# 	# Start Editing
 
-	def run_epoch(self):
-		# Initialize running loss
-		running_loss = 0.0
-
-		# Start Editing
-
-		# Set the ML library to enable the parameter training
-
-		# Shuffle the data (make sure to shuffle the train data in the same permutation as the train labels)
+	# 	# Set the ML library to enable the parameter training
 		
-		i = 0 # Number of batches
-		for batch in range(0, self.train_data.shape[0], self.batch_size):
-			batch_X = self.train_data[batch: batch+self.batch_size] # shape [batch_size,784] or [batch_size,28,28]
-			batch_Y = self.train_labels[batch: batch+self.batch_size] # shape [batch_size,]
+	# 	# Shuffle the data (make sure to shuffle the train data in the same permutation as the train labels)
+		
+	# 	i = 0 # Number of batches
+	# 	for batch in range(0, self.train_data.shape[0], self.batch_size):
+	# 		batch_X = self.train_data[batch: batch+self.batch_size] # shape [batch_size,784] or [batch_size,28,28]
+	# 		batch_Y = self.train_labels[batch: batch+self.batch_size] # shape [batch_size,]
 
 
-			# Zero out the grads for the optimizer
+	# 		# Zero out the grads for the optimizer
 			
-			# Find the predictions
-			# Find the loss
-			# Backpropagation
+	# 		# Find the predictions
+	# 		# Find the loss
+	# 		# Backpropagation
 
-			# Update the running loss
-			i += 1
+	# 		# Update the running loss
+	# 		i += 1
 		
-		# End Editing
+	# 	# End Editing
 
-		return running_loss / i
+	# 	return running_loss / i
 
-	def predict(self, image):
-		prediction = 0
-		if not self.model:
-			return prediction
-
-		# Start Editing
-
-		# Change image into representation favored by ML library (eg torch.Tensor for pytorch)
-		# This is the place you can reshape your data (eg for CNN's you will want image as 28x28 tensor and not 784 vector)
-		# Don't forget to normalize the data (eg. divide by 255 to bring the data into the range of 0-1)
-		
-		# Predict the digit value using the model
-
-		# End Editing
-		return prediction
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Model Trainer')
