@@ -2,21 +2,25 @@
 # Start Editing
 import tensorflow as tf
 from tensorflow import keras
-import numpy as np
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.layers import Activation, Dense, Flatten, BatchNormalization,Conv2D, MaxPool2D
+from tensorflow.keras.models import Sequential, Model, load_model
+from tensorflow.keras.layers import Activation, Dense, Flatten, BatchNormalization,Conv2D, MaxPool2D, Dropout
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.metrics import categorical_crossentropy
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from keras.datasets import mnist
 from sklearn.metrics import confusion_matrix
 from tensorflow.keras.applications import imagenet_utils
 import itertools
 import shutil
 import glob
 import matplotlib.pyplot as plt
-
+from keras import backend as K
 import os.path
+from sklearn.metrics import accuracy_score,recall_score,precision_score,f1_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import GridSearchCV
+
 
 # End Editing
 
@@ -25,7 +29,9 @@ import random
 import numpy as np
 from dataLoader import Loader
 import os
-import cv2 
+import cv2
+
+
 
 # (Optional) If you want to define any custom module (eg a custom pytorch module), this is the place to do so
 # Start Editing
@@ -39,14 +45,20 @@ class Trainer:
 		# Seed the RNG's
 		# This is the point where you seed your ML library, eg torch.manual_seed(12345)
 		# Start Editing
-		np.random.seed(12345)
-		random.seed(12345)
-
+		seed_value = 12345
+		os.environ['PYTHONHASHSEED']=str(seed_value)
+		np.random.seed(seed_value)
+		random.seed(seed_value)
+		tf.set_random_seed(seed_value)
+		session_conf = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=1)
+		sess = tf.Session(graph=tf.get_default_graph(), config=session_conf)
+		K.set_session(sess)
 		# End Editing
 
 		# Set hyperparameters. Fiddle around with the hyperparameters as different ones can give you better results
 		# (Optional) Figure out a way to do grid search on the hyperparameters to find the optimal set
 		# Start Editing
+		#######ADD GRID SEARCH######
 		self.batch_size = 64 # Batch Size
 		self.num_epochs = 20 # Number of Epochs to train for
 		self.lr = 0.01       # Learning rate
@@ -60,9 +72,16 @@ class Trainer:
 		# Also set an appropriate loss function. For beginners I suggest the Cross Entropy Loss
 		# Also set an appropriate optimizer. For beginners go with gradient descent (SGD), but others can play around with Adam, AdaGrad and you can even try a scheduler for the learning rate
 		# Start Editing
-		self.model = None
-		self.loss = None
-		self.optimizer = None
+		self.model = Sequential([
+			Conv2D(filters=32,kernel_size = (3,3), activation = 'relu', padding = 'same',  input_shape = (28, 28, 1)),
+			MaxPool2D(pool_size=(2,2), strides=2),
+			Conv2D(filters = 64, kernel_size = (3,3), activation ='relu', padding = 'same'),
+			MaxPool2D(pool_size=(2,2), strides=2),
+			Flatten(),
+			Dense(units = 10, activation='softmax'),
+			])
+		self.loss = categorical_crossentropy
+		self.optimizer = Adam
 		# End Editing
 
 	def load_data(self):
@@ -73,7 +92,23 @@ class Trainer:
 		# This is the place you can reshape your data (eg for CNN's you will want each data point as 28x28 tensor and not 784 vector)
 		# Don't forget to normalize the data (eg. divide by 255 to bring the data into the range of 0-1)
 		# Start Editing
+		img_rows, img_cols=28, 28
+		# if K.image_data_format() == 'channels_first':
+		train_data = train_data.reshape(train_data.shape[0], img_rows, img_cols, 1)
+		test_data = test_data.reshape(test_data.shape[0], img_rows, img_cols, 1)
+		# inpx = (1, img_rows, img_cols)
 		
+		# else:
+		# 	x_train = x_train.reshape(x_train.shape[0], img_rows, img_cols, 1)
+		# 	x_test = x_test.reshape(x_test.shape[0], img_rows, img_cols, 1)
+		# 	inpx = (img_rows, img_cols, 1)
+			
+		train_data = train_data.astype('float32')
+		test_data = test_data.astype('float32')
+		train_data /= 255
+		test_data /= 255
+		train_labels = keras.utils.to_categorical(train_labels)
+		test_labels = keras.utils.to_categorical(test_labels)	
 
 
 		# End Editing
@@ -83,8 +118,9 @@ class Trainer:
 		# Save the model parameters into the file 'assets/model'
 		# eg. For pytorch, torch.save(self.model.state_dict(), 'assets/model')
 		# Start Editing
-		
-
+		if os.path.isdir('assets/model') is False:
+			os.mkdir('assets/model')
+		self.model.save('assets/model/mnistcnn.h5')
 
 		# End Editing
 		pass
@@ -92,8 +128,8 @@ class Trainer:
 	def load_model(self):
 		# Load the model parameters from the file 'assets/model'
 		if os.path.exists('assets/model'):
+			self.model = load_model('assets/model/mnistcnn.h5')
 			# eg. For pytorch, self.model.load_state_dict(torch.load('assets/model'))
-			pass
 		else:
 			raise Exception('Model not trained')
 
@@ -108,6 +144,7 @@ class Trainer:
 			# For beginners, you can leave this alone as it is
 			# For others, you can try out splitting the train data into train + val data, and use the validation loss to determine whether to save the model or not
 			# Start Editing
+			
 			self.save_model()
 			# End Editing
 
