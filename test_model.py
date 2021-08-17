@@ -12,3 +12,5 @@ def testModel():
 	acc = t.test()
 
 	assert acc > 0.9, "Accuracy not high enough"
+
+testModel()
