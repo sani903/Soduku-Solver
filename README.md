@@ -9,6 +9,6 @@ This program succeeds in identifying the rows and columns from the sudoku puzzle
 <br>
 Due to the use of a custom CNN, the accuracy is not high enough to predict every digit of the puzzle correctly.
 <br>
-Due to incorrect predictions of even 1 digit, the soduku will then not have a solution.
+Due to incorrect predictions of even 1 digit, the sudoku will then not have a solution.
 <br>
 Thus, the sudoku solver does not work in practical use, but if used with an already trained model of much higher accuracy, one can get the solution to the sudoku.
