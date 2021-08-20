@@ -1,7 +1,7 @@
-# Soduku Solver
-Takes in soduku images as input with handwritten digits and classifies the digits and identifies box edges.
+# Sudoku Solver Using Deep Learning and OpenCV
+Takes in sudoku images as input with handwritten digits and classifies the digits and identifies box edges.
 <br>
-It then solves these sodukus and reprojects the solutions on the original image.
+It then solves these sudokus and reprojects the solutions on the original image.
 <br>
 I have trained a CNN from the MNIST database to help recognize the digits with an accuracy of 99.06%
 <br>
