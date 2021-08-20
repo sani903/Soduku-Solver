@@ -43,3 +43,8 @@ class Loader:
 		cv2.imshow('Preview', final)
 		cv2.waitKey(0)
 		cv2.destroyAllWindows()
+
+if __name__ == '__main__':
+	l = Loader()
+	l.preview()
+

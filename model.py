@@ -139,9 +139,8 @@ class Trainer:
 		print('Test score:', score)
 		print('Test accuracy:', acc)
 		return acc
+
 	
-
-
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Model Trainer')
