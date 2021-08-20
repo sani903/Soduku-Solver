@@ -12,3 +12,8 @@ Due to the use of a custom CNN, the accuracy is not high enough to predict every
 Due to incorrect predictions of even 1 digit, the sudoku will then not have a solution.
 <br>
 Thus, the sudoku solver does not work in practical use, but if used with an already trained model of much higher accuracy, one can get the solution to the sudoku.
+
+<br>
+<br>
+<br>
+In future updates, I will improve the accuracy of the CNN and thus solve the lack of practical application of this sudoku solver.
